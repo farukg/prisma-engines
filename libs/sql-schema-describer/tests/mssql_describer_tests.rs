@@ -1,17 +1,16 @@
-mod mssql;
 mod test_api;
 
-use crate::mssql::*;
+use crate::test_api::*;
 use barrel::{types, Migration};
 use native_types::{MsSqlType, MsSqlTypeParameter::*, NativeType};
 use pretty_assertions::assert_eq;
+use quaint::prelude::Queryable;
 use sql_schema_describer::*;
+use test_macros::test_each_connector;
 
-#[tokio::test]
-async fn all_mssql_column_types_must_work() {
-    let db_name = "all_mssql_column_types_must_work";
-
-    let mut migration = Migration::new().schema(db_name);
+#[test_each_connector(tags("mssql"))]
+async fn all_mssql_column_types_must_work(api: &TestApi) -> TestResult {
+    let mut migration = Migration::new().schema(api.db_name());
     migration.create_table("User", move |t| {
         t.add_column("primary_col", types::primary());
         t.add_column("bit_col", types::custom("bit"));
@@ -45,8 +44,8 @@ async fn all_mssql_column_types_must_work() {
     });
 
     let full_sql = migration.make::<barrel::backend::MsSql>();
-    let inspector = get_mssql_describer_for_schema(&full_sql, db_name).await;
-    let result = inspector.describe(db_name).await.expect("describing");
+    api.database().raw_cmd(&full_sql).await?;
+    let result = api.describe().await?;
     let mut table = result.get_table("User").expect("couldn't get User table").to_owned();
     // Ensure columns are sorted as expected when comparing
     table.columns.sort_unstable_by_key(|c| c.name.to_owned());
@@ -472,10 +471,12 @@ async fn all_mssql_column_types_must_work() {
         .as_ref()
         .map(|s| s.starts_with("PK__User__"))
         .unwrap_or(false));
+
+    Ok(())
 }
 
-#[tokio::test]
-async fn mssql_foreign_key_on_delete_must_be_handled() {
+#[test_each_connector(tags("mssql"))]
+async fn mssql_foreign_key_on_delete_must_be_handled(api: &TestApi) -> TestResult {
     let db_name = "mssql_foreign_key_on_delete_must_be_handled";
 
     let sql = format!(
@@ -493,9 +494,10 @@ async fn mssql_foreign_key_on_delete_must_be_handled() {
         ",
         db_name
     );
-    let inspector = get_mssql_describer_for_schema(&sql, db_name).await;
 
-    let schema = inspector.describe(db_name).await.expect("describing");
+    api.database().raw_cmd(&sql).await?;
+
+    let schema = api.describe().await?;
     let mut table = schema.get_table("User").expect("get User table").to_owned();
     table.foreign_keys.sort_unstable_by_key(|fk| fk.columns.clone());
 
@@ -571,13 +573,13 @@ async fn mssql_foreign_key_on_delete_must_be_handled() {
             ],
         }
     );
+
+    Ok(())
 }
 
-#[tokio::test]
-async fn mssql_multi_field_indexes_must_be_inferred() {
-    let db_name = "mssql_multi_field_indexes_must_be_inferred";
-
-    let mut migration = Migration::new().schema(db_name);
+#[test_each_connector(tags("mssql"))]
+async fn mssql_multi_field_indexes_must_be_inferred(api: &TestApi) -> TestResult {
+    let mut migration = Migration::new().schema(api.db_name());
     migration.create_table("Employee", move |t| {
         t.add_column("id", types::primary());
         t.add_column("age", types::integer());
@@ -586,8 +588,8 @@ async fn mssql_multi_field_indexes_must_be_inferred() {
     });
 
     let full_sql = migration.make::<barrel::backend::MsSql>();
-    let inspector = get_mssql_describer_for_schema(&full_sql, db_name).await;
-    let result = inspector.describe(db_name).await.expect("describing");
+    api.database().raw_cmd(&full_sql).await?;
+    let result = api.describe().await?;
     let table = result.get_table("Employee").expect("couldn't get Employee table");
 
     assert_eq!(
@@ -598,13 +600,13 @@ async fn mssql_multi_field_indexes_must_be_inferred() {
             tpe: IndexType::Unique
         }]
     );
+
+    Ok(())
 }
 
-#[tokio::test]
-async fn mssql_join_table_unique_indexes_must_be_inferred() {
-    let db_name = "mssql_join_table_unique_indexes_must_be_inferred";
-
-    let mut migration = Migration::new().schema(db_name);
+#[test_each_connector(tags("mssql"))]
+async fn mssql_join_table_unique_indexes_must_be_inferred(api: &TestApi) -> TestResult {
+    let mut migration = Migration::new().schema(api.db_name());
 
     migration.create_table("Cat", move |t| {
         t.add_column("id", types::primary());
@@ -624,8 +626,8 @@ async fn mssql_join_table_unique_indexes_must_be_inferred() {
     });
 
     let full_sql = migration.make::<barrel::backend::MsSql>();
-    let inspector = get_mssql_describer_for_schema(&full_sql, db_name).await;
-    let result = inspector.describe(db_name).await.expect("describing");
+    api.database().raw_cmd(&full_sql).await?;
+    let result = api.describe().await?;
     let table = result.get_table("CatToHuman").expect("couldn't get CatToHuman table");
 
     assert_eq!(
@@ -636,4 +638,6 @@ async fn mssql_join_table_unique_indexes_must_be_inferred() {
             tpe: IndexType::Unique,
         }]
     );
+
+    Ok(())
 }

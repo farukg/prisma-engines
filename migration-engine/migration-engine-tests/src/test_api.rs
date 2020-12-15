@@ -30,11 +30,8 @@ use crate::AssertionResult;
 
 use self::mark_migration_rolled_back::MarkMigrationRolledBack;
 
-use super::assertions::SchemaAssertion;
 use super::{
-    misc_helpers::{mysql_migration_connector, postgres_migration_connector, sqlite_migration_connector, test_api},
-    sql::barrel_migration_executor::BarrelMigrationExecutor,
-    InferAndApplyOutput,
+    assertions::SchemaAssertion, sql::barrel_migration_executor::BarrelMigrationExecutor, InferAndApplyOutput,
 };
 use crate::connectors::Tags;
 use crate::test_api::list_migration_directories::ListMigrationDirectories;
@@ -64,6 +61,36 @@ pub struct TestApi {
 }
 
 impl TestApi {
+    pub async fn new(args: TestAPIArgs) -> TestApi {
+        if args.test_tag.contains(Tags::Mysql) {
+            create_mysql_database(&args.test_database_url.parse().unwrap())
+                .await
+                .unwrap();
+        } else if args.test_tag.contains(Tags::Postgres) {
+            create_postgres_database(&args.test_database_url.parse().unwrap())
+                .await
+                .unwrap();
+        } else if args.test_tag.contains(Tags::Sqlite) {
+            sqlite_test_file(args.test_function_name);
+        }
+
+        if args.test_tag.contains(Tags::Mssql) {
+            let db = create_mssql_database(args.test_database_url).await.unwrap();
+
+            connectors::mssql::reset_schema(&db, args.test_function_name)
+                .await
+                .unwrap();
+        }
+
+        let connector = SqlMigrationConnector::new(args.test_database_url).await.unwrap();
+
+        TestApi {
+            database: connector.quaint().clone(),
+            api: MigrationApi::new(connector).await.unwrap(),
+            tags: args.test_tag,
+        }
+    }
+
     pub fn schema_name(&self) -> &str {
         self.connection_info().schema_name()
     }
@@ -363,148 +390,6 @@ impl<'a> TestApiSelect<'a> {
 
     pub async fn send(self) -> anyhow::Result<quaint::prelude::ResultSet> {
         Ok(self.api.database().query(self.select.into()).await?)
-    }
-}
-
-pub async fn mysql_8_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = mysql_8_url(db_name);
-    let connector = mysql_migration_connector(&url).await;
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
-    }
-}
-
-pub async fn mysql_5_6_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = mysql_5_6_url(db_name);
-    let connector = mysql_migration_connector(&url).await;
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
-    }
-}
-
-pub async fn mysql_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = mysql_url(db_name);
-    let connector = mysql_migration_connector(&url).await;
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
-    }
-}
-
-pub async fn mysql_mariadb_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = mariadb_url(db_name);
-    let connector = mysql_migration_connector(&url).await;
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
-    }
-}
-
-pub async fn postgres9_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = postgres_9_url(db_name);
-    let connector = postgres_migration_connector(&url).await;
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
-    }
-}
-
-pub async fn postgres_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = postgres_10_url(db_name);
-    let connector = postgres_migration_connector(&url).await;
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
-    }
-}
-
-pub async fn postgres11_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = postgres_11_url(db_name);
-    let connector = postgres_migration_connector(&url).await;
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
-    }
-}
-
-pub async fn postgres12_test_api(args: TestAPIArgs) -> TestApi {
-    let url = postgres_12_url(args.test_function_name);
-    let connector = postgres_migration_connector(&url).await;
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
-    }
-}
-
-pub async fn postgres13_test_api(args: TestAPIArgs) -> TestApi {
-    let url = postgres_13_url(args.test_function_name);
-    let connector = postgres_migration_connector(&url).await;
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
-    }
-}
-
-pub async fn sqlite_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let connector = sqlite_migration_connector(db_name).await;
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
-    }
-}
-
-pub async fn mssql_2017_test_api(args: TestAPIArgs) -> TestApi {
-    mssql_test_api(mssql_2017_url("master"), args).await
-}
-
-pub async fn mssql_2019_test_api(args: TestAPIArgs) -> TestApi {
-    mssql_test_api(mssql_2019_url("master"), args).await
-}
-
-async fn mssql_test_api(connection_string: String, args: TestAPIArgs) -> TestApi {
-    let schema = args.test_function_name;
-    let connection_string = format!("{};schema={}", connection_string, schema);
-
-    let database = Quaint::new(&connection_string).await.unwrap();
-
-    connectors::mssql::reset_schema(&database, schema).await.unwrap();
-
-    let connector = SqlMigrationConnector::new(&connection_string).await.unwrap();
-
-    TestApi {
-        database: connector.quaint().clone(),
-        api: test_api(connector).await,
-        tags: args.test_tag,
     }
 }
 

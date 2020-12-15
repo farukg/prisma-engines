@@ -14,7 +14,10 @@ use quaint::{
 };
 use sql_migration_connector::{SqlMigration, SqlMigrationConnector};
 use std::sync::Arc;
-use test_setup::*;
+use test_setup::{
+    connectors::Tags, mssql_2019_test_config, mysql_test_config, postgres_12_test_config, sqlite_test_config,
+    TestAPIArgs,
+};
 
 pub struct QueryEngine {
     context: Arc<PrismaContext>,
@@ -43,6 +46,33 @@ pub struct TestApi {
 }
 
 impl TestApi {
+    pub async fn new(args: TestAPIArgs) -> TestApi {
+        let db_name = args.test_function_name;
+        let connection_info = ConnectionInfo::from_url(args.test_database_url).unwrap();
+
+        let migration_api = MigrationApi::new(SqlMigrationConnector::new(args.test_database_url).await.unwrap())
+            .await
+            .unwrap();
+
+        let config = if args.test_tag.contains(Tags::Mysql) {
+            mysql_test_config(db_name)
+        } else if args.test_tag.contains(Tags::Mssql) {
+            mssql_2019_test_config(db_name)
+        } else if args.test_tag.contains(Tags::Postgres) {
+            postgres_12_test_config(db_name)
+        } else if args.test_tag.contains(Tags::Sqlite) {
+            sqlite_test_config(db_name)
+        } else {
+            unreachable!()
+        };
+
+        TestApi {
+            connection_info,
+            migration_api,
+            config,
+        }
+    }
+
     pub async fn create_engine(&self, datamodel: &str) -> anyhow::Result<QueryEngine> {
         feature_flags::initialize(&[String::from("all")]).unwrap();
 
@@ -81,227 +111,4 @@ impl TestApi {
             ConnectionInfo::Mssql(_) => visitor::Mssql::build(query),
         }
     }
-}
-
-pub async fn mysql_8_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = mysql_8_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(mysql_migration_connector(&url).await).await.unwrap();
-
-    let config = mysql_8_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn mysql_5_6_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = mysql_5_6_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(mysql_migration_connector(&url).await).await.unwrap();
-
-    let config = mysql_5_6_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn mysql_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = mysql_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(mysql_migration_connector(&url).await).await.unwrap();
-
-    let config = mysql_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn mysql_mariadb_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = mariadb_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(mysql_migration_connector(&url).await).await.unwrap();
-
-    let config = mariadb_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn postgres9_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = postgres_9_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(postgres_migration_connector(&url).await)
-        .await
-        .unwrap();
-
-    let config = postgres_9_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn postgres_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = postgres_10_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(postgres_migration_connector(&url).await)
-        .await
-        .unwrap();
-
-    let config = postgres_10_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn postgres11_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = postgres_11_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(postgres_migration_connector(&url).await)
-        .await
-        .unwrap();
-
-    let config = postgres_11_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn postgres12_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = postgres_12_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(postgres_migration_connector(&url).await)
-        .await
-        .unwrap();
-
-    let config = postgres_12_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn postgres13_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = postgres_13_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(postgres_migration_connector(&url).await)
-        .await
-        .unwrap();
-
-    let config = postgres_13_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn sqlite_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = sqlite_test_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(sqlite_migration_connector(db_name).await)
-        .await
-        .unwrap();
-
-    let config = sqlite_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn mssql_2017_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = mssql_2017_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(mssql_migration_connector(&url).await).await.unwrap();
-
-    let config = mssql_2017_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub async fn mssql_2019_test_api(args: TestAPIArgs) -> TestApi {
-    let db_name = args.test_function_name;
-    let url = mssql_2019_url(db_name);
-    let connection_info = ConnectionInfo::from_url(&url).unwrap();
-
-    let migration_api = MigrationApi::new(mssql_migration_connector(&url).await).await.unwrap();
-
-    let config = mssql_2019_test_config(db_name);
-
-    TestApi {
-        connection_info,
-        migration_api,
-        config,
-    }
-}
-
-pub(super) async fn mysql_migration_connector(url_str: &str) -> SqlMigrationConnector {
-    create_mysql_database(&url_str.parse().unwrap()).await.unwrap();
-    SqlMigrationConnector::new(url_str).await.unwrap()
-}
-
-pub(super) async fn mssql_migration_connector(url_str: &str) -> SqlMigrationConnector {
-    create_mssql_database(url_str).await.unwrap();
-    SqlMigrationConnector::new(url_str).await.unwrap()
-}
-
-pub(super) async fn postgres_migration_connector(url_str: &str) -> SqlMigrationConnector {
-    create_postgres_database(&url_str.parse().unwrap()).await.unwrap();
-    SqlMigrationConnector::new(url_str).await.unwrap()
-}
-
-pub(super) async fn sqlite_migration_connector(db_name: &str) -> SqlMigrationConnector {
-    SqlMigrationConnector::new(&sqlite_test_url(db_name)).await.unwrap()
 }

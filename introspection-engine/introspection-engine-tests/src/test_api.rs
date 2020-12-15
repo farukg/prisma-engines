@@ -24,6 +24,34 @@ pub struct TestApi {
 }
 
 impl TestApi {
+    pub async fn new(args: TestAPIArgs) -> TestApi {
+        let db_name = args.test_function_name;
+
+        match args.test_tag {
+            tags if tags.contains(Tags::Sqlite) => (),
+            tags if tags.contains(Tags::Mysql) => {
+                create_mysql_database(&args.test_database_url.parse().unwrap())
+                    .await
+                    .unwrap();
+            }
+            tags if tags.contains(Tags::Postgres) => create_postgres_database(&args.test_database_url.parse().unwrap()),
+            tags if tags.contains(Tags::Mssql) => todo!(),
+            _ => unreachable!(),
+        }
+
+        let database = Quaint::new(&args.test_database_url).await.unwrap();
+        let introspection_connector = SqlIntrospectionConnector::new(&args.test_database_url).await.unwrap();
+
+        TestApi {
+            db_name,
+            tags: args.test_tag,
+            connection_info: database.connection_info().to_owned(),
+            database,
+            sql_family: SqlFamily::Sqlite,
+            introspection_connector,
+        }
+    }
+
     pub async fn list_databases(&self) -> Result<Vec<String>> {
         Ok(self.introspection_connector.list_databases().await?)
     }

@@ -8,20 +8,29 @@ pub use tags::*;
 use enumflags2::BitFlags;
 use once_cell::sync::Lazy;
 
-fn connector_names() -> Vec<(&'static str, BitFlags<Tags>)> {
+use crate::{
+    mariadb_url, mssql_2017_url, mssql_2019_url, mysql_5_6_url, mysql_8_url, mysql_url, postgres_10_url,
+    postgres_11_url, postgres_12_url, postgres_13_url, postgres_9_url, sqlite_test_url,
+};
+
+fn connector_names() -> Vec<(
+    &'static str,
+    BitFlags<Tags>,
+    &'static (dyn Fn(&str) -> String + Send + Sync + 'static),
+)> {
     vec![
-        ("mssql_2017", Tags::Mssql2017.into()),
-        ("mssql_2019", Tags::Mssql2019.into()),
-        ("mysql_8", Tags::Mysql | Tags::Mysql8),
-        ("mysql", Tags::Mysql.into()),
-        ("mysql_5_6", Tags::Mysql | Tags::Mysql56),
-        ("postgres9", Tags::Postgres.into()),
-        ("postgres", Tags::Postgres.into()),
-        ("postgres11", Tags::Postgres.into()),
-        ("postgres12", Tags::Postgres.into()),
-        ("postgres13", Tags::Postgres.into()),
-        ("mysql_mariadb", Tags::Mysql | Tags::Mariadb),
-        ("sqlite", Tags::Sqlite.into()),
+        ("mssql_2017", Tags::Mssql2017 | Tags::Mssql, &mssql_2017_url),
+        ("mssql_2019", Tags::Mssql2019 | Tags::Mssql, &mssql_2019_url),
+        ("mysql_8", Tags::Mysql | Tags::Mysql8, &mysql_8_url),
+        ("mysql", Tags::Mysql.into(), &mysql_url),
+        ("mysql_5_6", Tags::Mysql | Tags::Mysql56, &mysql_5_6_url),
+        ("postgres9", Tags::Postgres.into(), &postgres_9_url),
+        ("postgres", Tags::Postgres.into(), &postgres_10_url),
+        ("postgres11", Tags::Postgres.into(), &postgres_11_url),
+        ("postgres12", Tags::Postgres.into(), &postgres_12_url),
+        ("postgres13", Tags::Postgres.into(), &postgres_13_url),
+        ("mysql_mariadb", Tags::Mysql | Tags::Mariadb, &mariadb_url),
+        ("sqlite", Tags::Sqlite.into(), &sqlite_test_url),
     ]
 }
 
@@ -72,11 +81,12 @@ fn infer_capabilities(tags: BitFlags<Tags>) -> BitFlags<Capabilities> {
 pub static CONNECTORS: Lazy<Connectors> = Lazy::new(|| {
     let connectors: Vec<Connector> = connector_names()
         .iter()
-        .map(|(name, tags)| Connector {
+        .map(|(name, tags, url_fn)| Connector {
             name: (*name).to_owned(),
             test_api_factory_name: format!("{}_test_api", name),
             capabilities: infer_capabilities(*tags),
             tags: *tags,
+            url_fn: *url_fn,
         })
         .collect();
 
@@ -111,6 +121,7 @@ pub struct Connector {
     test_api_factory_name: String,
     pub capabilities: BitFlags<Capabilities>,
     pub tags: BitFlags<Tags>,
+    url_fn: &'static (dyn Fn(&str) -> String + Send + Sync + 'static),
 }
 
 impl Connector {
@@ -122,5 +133,9 @@ impl Connector {
     /// The name of the API factory function for that connector.
     pub fn test_api(&self) -> &str {
         &self.test_api_factory_name
+    }
+
+    pub fn build_test_connection_string(&self, db_name: &str) -> String {
+        (*self.url_fn)(db_name)
     }
 }

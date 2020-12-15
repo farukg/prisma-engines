@@ -9,7 +9,6 @@ use sql_schema_describer::*;
 use test_macros::test_each_connector;
 
 mod common;
-mod mssql;
 mod mysql;
 mod postgres;
 mod sqlite;

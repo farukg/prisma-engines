@@ -23,6 +23,10 @@ pub struct TestApi {
 }
 
 impl TestApi {
+    pub async fn new(_args: TestAPIArgs) -> TestApi {
+        todo!()
+    }
+
     pub(crate) async fn describe(&self) -> Result<SqlSchema, anyhow::Error> {
         let db = self.database.clone();
         let describer: Box<dyn sql_schema_describer::SqlSchemaDescriberBackend> = match self.sql_family() {

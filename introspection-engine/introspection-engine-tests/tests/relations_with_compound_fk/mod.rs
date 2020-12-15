@@ -1,6 +1,6 @@
 use barrel::types;
 use indoc::indoc;
-use introspection_engine_tests::{assert_eq_datamodels, test_api::*};
+use introspection_engine_tests::{assert_eq_datamodels, test_api::TestApi};
 use test_macros::test_each_connector;
 
 #[test_each_connector]

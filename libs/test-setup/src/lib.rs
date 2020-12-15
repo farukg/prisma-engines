@@ -27,14 +27,17 @@ const SCHEMA_NAME: &str = "prisma-tests";
 
 pub struct TestAPIArgs {
     pub test_function_name: &'static str,
+    pub test_database_url: &'static str,
     pub test_tag: BitFlags<Tags>,
 }
 
 impl TestAPIArgs {
-    pub fn new(name: &'static str, tags: u8) -> Self {
+    pub fn new(test_function_name: &'static str, test_database_url: &'static str, tags: u16) -> Self {
         let tags: BitFlags<Tags> = BitFlags::from_bits(tags).unwrap();
+
         TestAPIArgs {
-            test_function_name: name,
+            test_function_name,
+            test_database_url,
             test_tag: tags,
         }
     }
@@ -44,6 +47,7 @@ pub fn sqlite_test_url(db_name: &str) -> String {
     format!("file:{}?db_name={}", sqlite_test_file(db_name), SCHEMA_NAME)
 }
 
+/// Set up a SQLite test file for tests and returns its file path.
 pub fn sqlite_test_file(db_name: &str) -> String {
     static SERVER_ROOT: Lazy<std::path::PathBuf> = Lazy::new(|| {
         std::env::var("SERVER_ROOT")
