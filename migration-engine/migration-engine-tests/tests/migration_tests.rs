@@ -1,22 +1,16 @@
-mod apply_migration;
 mod apply_migrations;
-mod calculate_database_steps;
 mod create_migration;
-mod datamodel_calculator;
-mod datamodel_steps_inferrer;
 mod diagnose_migration_history;
 mod errors;
 mod evaluate_data_loss;
 mod existing_data;
 mod existing_databases;
-mod infer_migration_steps;
 mod initialization;
 mod list_migration_directories;
 mod migration_persistence;
 mod migrations;
 mod reset;
 mod schema_push;
-mod unapply_migration;
 
 use migration_engine_tests::sql::*;
 use pretty_assertions::assert_eq;
@@ -1769,7 +1763,7 @@ async fn renaming_a_datasource_works(api: &TestApi) -> TestResult {
         }
     "#;
 
-    let infer_output = api.infer(dm1.to_owned()).send().await?;
+    api.schema_push(dm1).send().await?.assert_green()?;
 
     let dm2 = r#"
         datasource db2 {
@@ -1782,11 +1776,7 @@ async fn renaming_a_datasource_works(api: &TestApi) -> TestResult {
         }
     "#;
 
-    api.infer(dm2.to_owned())
-        .assume_to_be_applied(Some(infer_output.datamodel_steps))
-        .migration_id(Some("mig02".to_owned()))
-        .send()
-        .await?;
+    api.schema_push(dm2).migration_id(Some("mig02")).send().await?;
 
     Ok(())
 }
